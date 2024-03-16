@@ -76,29 +76,98 @@ contract NFinTech is IERC721 {
 
     function setApprovalForAll(address operator, bool approved) external {
         // TODO: please add your implementaiton here
+        _operatorApproval[msg.sender][operator] = approved;
+        require(operator!= address(0), "ERC721: approval to the zero address");
+        emit ApprovalForAll(msg.sender, operator, approved);
     }
 
     function isApprovedForAll(address owner, address operator) public view returns (bool) {
         // TODO: please add your implementaiton here
+        return _operatorApproval[owner][operator];
     }
 
     function approve(address to, uint256 tokenId) external {
         // TODO: please add your implementaiton here
+        address owner = ownerOf(tokenId);
+        require(to != owner, "ERC721: approval to current owner");
+        require(msg.sender == owner || isApprovedForAll(owner, msg.sender), "ERC721: approve caller is not owner nor approved for all");
+
+        _tokenApproval[tokenId] = to;
+        emit Approval(owner, to, tokenId);
     }
 
     function getApproved(uint256 tokenId) public view returns (address operator) {
         // TODO: please add your implementaiton here
+        return _tokenApproval[tokenId];
     }
 
     function transferFrom(address from, address to, uint256 tokenId) public {
         // TODO: please add your implementaiton here
+        address owner = ownerOf(tokenId);
+        require(msg.sender == owner || msg.sender == getApproved(tokenId) || isApprovedForAll(owner, msg.sender),
+            "ERC721: transfer caller is not owner nor approved");
+
+        require(owner == from, "ERC721: transfer of token that is not own");
+        require(to != address(0), "ERC721: transfer to the zero address");
+
+        _tokenApproval[tokenId] = address(0);
+        _balances[from] -= 1;
+        _balances[to] += 1;
+        _owner[tokenId] = to;
+
+        emit Transfer(from, to, tokenId);
     }
 
     function safeTransferFrom(address from, address to, uint256 tokenId, bytes calldata data) public {
         // TODO: please add your implementaiton here
+        transferFrom(from, to, tokenId);
+        emit Transfer(from, to, tokenId);
+        if (to != address(0) && to != address(this)) {
+            uint size;
+            assembly {
+                size := extcodesize(to)
+            }
+            require(size > 0, "ERC721: transfer to non-contract address");
+        }
+        //if (data.length > 0) {
+        if (to != address(0) && to != address(this)) {
+            try IERC721TokenReceiver(to).onERC721Received(msg.sender, from, tokenId, data) returns (bytes4 retval) {
+                if (retval != IERC721TokenReceiver(to).onERC721Received.selector) {
+                    revert("ERC721: transfer to non ERC721Receiver implementer");
+                }
+            } catch Error(string memory reason) {
+                revert(reason);
+            } catch (bytes memory lowLevelData) {
+                revert(string(lowLevelData));
+            }
+        }
     }
 
     function safeTransferFrom(address from, address to, uint256 tokenId) public {
         // TODO: please add your implementaiton here
+        transferFrom(from, to, tokenId);
+        emit Transfer(from, to, tokenId);
+
+        if (to != address(0) && to != address(this)) {
+            uint size;
+            assembly {
+                size := extcodesize(to)
+            }
+            require(size > 0, "ERC721: transfer to non-contract address");
+        }
+
+        // 如果接收方是合约地址，则调用其 onERC721Received 函数
+        if (to != address(0) && to != address(this)) {
+            try IERC721TokenReceiver(to).onERC721Received(msg.sender, from, tokenId,"") returns (bytes4 retval) {
+                if (retval != IERC721TokenReceiver(to).onERC721Received.selector) {
+                    revert("ERC721: transfer to non ERC721Receiver implementer");
+                }
+            } catch Error(string memory reason) {
+                revert(reason);
+            } catch (bytes memory lowLevelData) {
+                revert(string(lowLevelData));
+            }
+        }
     }
 }
+
